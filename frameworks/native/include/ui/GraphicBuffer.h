@@ -72,9 +72,11 @@ public:
 
     GraphicBuffer();
 
+#ifdef QCOM_HARDWARE
     // creates buffer of bufferSize
     GraphicBuffer(uint32_t w, uint32_t h,
                   PixelFormat format, uint32_t usage, uint32_t bufferSize);
+#endif
 
     // creates w * h buffer
     GraphicBuffer(uint32_t w, uint32_t h, PixelFormat format, uint32_t usage);
@@ -144,8 +146,10 @@ private:
 
     status_t initSize(uint32_t w, uint32_t h, PixelFormat format,
             uint32_t usage);
+#ifdef QCOM_HARDWARE
     status_t initSize(uint32_t w, uint32_t h, PixelFormat format,
             uint32_t usage, uint32_t bufferSize);
+#endif
 
     void free_handle();
 
@@ -155,21 +159,17 @@ private:
     // If we're wrapping another buffer then this reference will make sure it
     // doesn't get freed.
     sp<ANativeWindowBuffer> mWrappedBuffer;
-    
-#ifdef MTK_6577
-//6589 functions needed here will define later
-//public:
-//   status_t getIonFd(int *idx, int *num);
-//   unsigned int getMva() { return mva; }
-//   void setMva(unsigned int _mva);
+
+#ifdef MTK_G_MT6577
+public:
+    status_t getIonFd(int *idx, int *num);
+    unsigned int getMva() const { return mva; }
+    void setMva(unsigned int _mva);
 
 private:
-    status_t mapBuffer();
-    status_t unmapBuffer();
     unsigned int mva;
     unsigned int msize;
 #endif
-
 };
 
 }; // namespace android

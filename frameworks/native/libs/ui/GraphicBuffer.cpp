@@ -28,10 +28,6 @@
 #include <ui/GraphicBufferMapper.h>
 #include <ui/PixelFormat.h>
 
-#ifdef MTK_6577
-#define LOCK_FOR_VA (GRALLOC_USAGE_SW_READ_RARELY | GRALLOC_USAGE_SW_WRITE_NEVER | GRALLOC_USAGE_HW_TEXTURE)
-#endif
-
 namespace android {
 
 // ===========================================================================
@@ -47,9 +43,9 @@ GraphicBuffer::GraphicBuffer()
     format = 
     usage  = 0;
     handle = NULL;
-#ifdef MTK_6577
-    mva    = 0;
-    msize  = 0;
+#ifdef MTK_MT6577
+    mva = 0;
+    msize = 0;
 #endif
 }
 
@@ -64,13 +60,14 @@ GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
     format =
     usage  = 0;
     handle = NULL;
-#ifdef MTK_6577
-    mva    = 0;
-    msize  = 0;
+#ifdef MTK_MT6577
+    mva = 0;
+    msize = 0;
 #endif
     mInitCheck = initSize(w, h, reqFormat, reqUsage);
 }
 
+#ifdef QCOM_HARDWARE
 GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
         PixelFormat reqFormat, uint32_t reqUsage, uint32_t bufferSize)
     : BASE(), mOwner(ownData), mBufferMapper(GraphicBufferMapper::get()),
@@ -82,12 +79,13 @@ GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
     format =
     usage  = 0;
     handle = NULL;
-#ifdef MTK_6577
-    mva    = 0;
-    msize  = 0;
-#endif
     mInitCheck = initSize(w, h, reqFormat, reqUsage, bufferSize);
+#ifdef MTK_MT6577
+    mva = 0;
+    msize = 0;
+#endif
 }
+#endif
 
 GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
         PixelFormat inFormat, uint32_t inUsage,
@@ -102,14 +100,9 @@ GraphicBuffer::GraphicBuffer(uint32_t w, uint32_t h,
     format = inFormat;
     usage  = inUsage;
     handle = inHandle;
-
-#ifdef MTK_6577
-    mva    = 0;
-    msize  = 0;
-
-    if (mOwner == ownHandle) {
-        mapBuffer();
-    }
+#ifdef MTK_MT6577
+    mva = 0;
+    msize = 0;
 #endif
 }
 
@@ -124,14 +117,9 @@ GraphicBuffer::GraphicBuffer(ANativeWindowBuffer* buffer, bool keepOwnership)
     format = buffer->format;
     usage  = buffer->usage;
     handle = buffer->handle;
-
-#ifdef MTK_6577
-    mva    = 0;
-    msize  = 0;
-
-  	if (mOwner == ownHandle) {
-        mapBuffer();
-    }
+#ifdef MTK_MT6577
+    mva = 0;
+    msize = 0;
 #endif
 }
 
@@ -145,18 +133,10 @@ GraphicBuffer::~GraphicBuffer()
 void GraphicBuffer::free_handle()
 {
     if (mOwner == ownHandle) {
-#ifdef MTK_6577
-        unmapBuffer();
-#endif
-
         mBufferMapper.unregisterBuffer(handle);
         native_handle_close(handle);
         native_handle_delete(const_cast<native_handle*>(handle));
     } else if (mOwner == ownData) {
-#ifdef MTK_6577
-        unmapBuffer();
-#endif
-
         GraphicBufferAllocator& allocator(GraphicBufferAllocator::get());
         allocator.free(handle);
     }
@@ -188,10 +168,6 @@ status_t GraphicBuffer::reallocate(uint32_t w, uint32_t h, PixelFormat f,
         return NO_ERROR;
 
     if (handle) {
-#ifdef MTK_6577
-        unmapBuffer();
-#endif
-
         GraphicBufferAllocator& allocator(GraphicBufferAllocator::get());
         allocator.free(handle);
         handle = 0;
@@ -209,14 +185,11 @@ status_t GraphicBuffer::initSize(uint32_t w, uint32_t h, PixelFormat format,
         this->height = h;
         this->format = format;
         this->usage  = reqUsage;
-
-#ifdef MTK_6577
-        mapBuffer();
-#endif
     }
     return err;
 }
 
+#ifdef QCOM_HARDWARE
 status_t GraphicBuffer::initSize(uint32_t w, uint32_t h, PixelFormat format,
                                  uint32_t reqUsage, uint32_t bufferSize)
 {
@@ -228,12 +201,10 @@ status_t GraphicBuffer::initSize(uint32_t w, uint32_t h, PixelFormat format,
         this->height = h;
         this->format = format;
         this->usage  = reqUsage;
-#ifdef MTK_6577
-        mapBuffer();
-#endif
     }
     return err;
 }
+#endif
 
 status_t GraphicBuffer::lock(uint32_t usage, void** vaddr)
 {
@@ -313,12 +284,18 @@ status_t GraphicBuffer::flatten(void*& buffer, size_t& size, int*& fds, size_t& 
         native_handle_t const* const h = handle;
         memcpy(fds,     h->data,             h->numFds*sizeof(int));
         memcpy(&buf[8], h->data + h->numFds, h->numInts*sizeof(int));
+#ifdef QCOM_HARDWARE
         fds += handle->numFds;
         count -= handle->numFds;
+#endif
     }
 
     buffer = reinterpret_cast<void*>(static_cast<int*>(buffer) + sizeNeeded);
     size -= sizeNeeded;
+#ifndef QCOM_HARDWARE
+    fds += handle->numFds;
+    count -= handle->numFds;
+#endif
 
     return NO_ERROR;
 }
@@ -363,9 +340,6 @@ status_t GraphicBuffer::unflatten(
 
     if (handle != 0) {
         status_t err = mBufferMapper.registerBuffer(handle);
-#ifdef MTK_6577
-        mapBuffer();
-#endif
         if (err != NO_ERROR) {
             width = height = stride = format = usage = 0;
             handle = NULL;
@@ -382,6 +356,19 @@ status_t GraphicBuffer::unflatten(
 
     return NO_ERROR;
 }
+
+#ifdef MTK_MT6577
+status_t GraphicBuffer::getIonFd(int *idx, int *num)
+{
+    return getBufferMapper().getIonFd(handle, idx, num);
+}
+
+void GraphicBuffer::setMva(unsigned int _mva)
+{
+    mva = _mva;
+}
+
+#endif
 
 // ---------------------------------------------------------------------------
 
